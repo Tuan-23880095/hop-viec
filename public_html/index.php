@@ -1,4 +1,4 @@
-<?php if(!file_exists(__DIR__."/config.php")){header("Location: setup.php");exit;} ?>
+<?php require __DIR__.'/lib.php'; if(!hv_config()){header('Location: setup.php');exit;} ?>
 <!doctype html><html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Hộp việc đội agent</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
 <style>
