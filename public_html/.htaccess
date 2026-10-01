@@ -1,0 +1,13 @@
+Options -Indexes
+RewriteEngine On
+# /mcp/<token>  ->  mcp.php?token=<token>
+RewriteRule ^mcp/([A-Za-z0-9]+)/?$ mcp.php?token=$1 [L,QSA]
+# Chuyển Authorization header cho PHP (một số host không chuyển sẵn)
+RewriteCond %{HTTP:Authorization} .
+RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+
+# Chặn truy cập trực tiếp vào dữ liệu và cấu hình
+<FilesMatch "^(config\.php|config\.sample\.php|lib\.php)$">
+  Require all denied
+</FilesMatch>
+RedirectMatch 404 ^/data/
