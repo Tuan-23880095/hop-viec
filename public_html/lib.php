@@ -58,6 +58,7 @@ function hv_migrate(PDO $pdo): void {
         note TEXT DEFAULT '', updated_at TEXT)");
     $pdo->exec("CREATE TABLE IF NOT EXISTS budgets (key TEXT PRIMARY KEY, value INTEGER NOT NULL)");
     $pdo->exec("CREATE TABLE IF NOT EXISTS log (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT, actor TEXT, action TEXT, task_id TEXT, detail TEXT)");
+    $pdo->exec("CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)");
     $n = (int)$pdo->query("SELECT COUNT(*) FROM budgets")->fetchColumn();
     if ($n === 0) {
         $st = $pdo->prepare("INSERT INTO budgets(key,value) VALUES(?,?)");
@@ -206,4 +207,80 @@ function hv_overview(): array {
     $open = hv_list_tasks(); $late = 0; foreach ($open as $t) if ($t['due'] && $t['due'] < hv_today()) $late++;
     $review = (int)hv_db()->query("SELECT COUNT(*) FROM tasks WHERE status='cho_duyet'")->fetchColumn();
     return ['open'=>count($open),'late'=>$late,'review'=>$review,'usage'=>hv_usage_summary(),'today'=>hv_today()];
+}
+
+// ---------- Cài đặt (lưu trong CSDL, ngoài thư mục deploy) ----------
+function hv_setting(string $k, string $default = ''): string {
+    $st = hv_db()->prepare('SELECT value FROM settings WHERE key = ?'); $st->execute([$k]);
+    $v = $st->fetchColumn(); return $v === false ? $default : (string)$v;
+}
+function hv_set_setting(string $k, string $v): void {
+    hv_db()->prepare('INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value')->execute([$k, $v]);
+}
+
+// ---------- Gợi ý điền việc bằng Gemini API ----------
+const HV_TRIAGE_RULES = <<<'TXT'
+Bạn là trợ lý phân loại việc cho Tuấn: giảng viên Khoa Địa chất (ĐH KHTN – ĐHQG-HCM), cũng dạy Toán/KHTN phổ thông, đang học văn bằng 2 CNTT, quản lý đề tài NCKH (vd T2025-03 mô hình hình học laser).
+Nhiệm vụ: từ mô tả thô của một việc, điền các trường để giao cho đúng agent, tốn ít token Claude nhất.
+
+group (nhóm việc): nghien-cuu (bài báo, literature review, dữ liệu địa chất, đề tài NCKH, hội nghị), giang-day (bài giảng, đề thi, bài tập, thực địa, điểm danh, sinh viên), edtech (code, web app, script, MCP, cài đặt phần mềm, repo), quan-ly (báo cáo, biểu mẫu, email, lịch, tài chính, hồ sơ).
+who (giao cho) — chọn tuyến rẻ nhất đủ làm:
+- notebooklm: đọc/tra cứu/tóm tắt tài liệu có sẵn trong notebook, trích dẫn, hỏi đáp trên tài liệu.
+- gemini: viết nháp, dịch, tóm tắt văn bản gửi kèm, soạn đề/bài tập hàng loạt, việc lặp theo mẫu.
+- antigravity: viết/sửa code, xử lý nhiều file, đọc ảnh/PDF scan/video, chạy script trên máy.
+- spark: việc theo lịch trong Gmail/Calendar/Drive (gom email, nhắc hạn, cập nhật bảng).
+- claude: cần suy luận, lập luận, phản biện, duyệt chất lượng, viết phần khó nhất, quyết định thiết kế.
+- co-van: chỉ khi mô tả nói rõ là vấn đề khó lặp lại, mâu thuẫn ưu tiên, cần quyết định chiến lược.
+- tuan: việc chỉ Tuấn làm được (ký, họp, thanh toán, đăng nhập, cấp quyền, đi thực địa).
+priority: 3 nếu có hạn ≤ 3 ngày, liên quan điểm/thi/nộp hồ sơ/deadline đề tài, hoặc chặn việc khác; 1 nếu "khi rảnh", ý tưởng, không hạn; còn lại 2.
+due: YYYY-MM-DD nếu mô tả nêu hạn (hôm nay là {TODAY}, tuần này = thứ Sáu tuần này, cuối tháng = ngày cuối tháng); rỗng nếu không rõ.
+title: ≤ 90 ký tự, bắt đầu bằng động từ, giữ mã đề tài/tên lớp nếu có.
+desc: 2–5 dòng cho agent: đầu ra mong muốn (định dạng, độ dài), nguồn (notebook/file/link nếu nêu), giới hạn, tiêu chí đạt. Luôn kết bằng "Nộp theo khuôn KẾT QUẢ / VẤN ĐỀ / CẦN QUYẾT ĐỊNH ≤300 từ."
+reason: 1 câu giải thích vì sao giao cho who đó.
+Trả về JSON đúng schema, tiếng Việt, không thêm chữ ngoài JSON.
+TXT;
+
+function hv_suggest(string $text, array $projects = []): array {
+    $key = hv_setting('gemini_api_key');
+    if ($key === '') throw new RuntimeException('Chưa có Gemini API key. Vào mục Cài đặt (⚙) để dán key.');
+    $model = hv_setting('gemini_model', 'gemini-2.5-flash');
+    $rules = str_replace('{TODAY}', hv_today(), HV_TRIAGE_RULES);
+    if ($projects) $rules .= "\nDự án hiện có (projectId: tên): " . implode('; ', array_map(fn($p)=>$p['id'].': '.$p['name'], $projects)) . ". Chọn projectId nếu việc thuộc dự án nào, không thì rỗng.";
+    $schema = ['type'=>'OBJECT','properties'=>[
+        'title'=>['type'=>'STRING'],'group'=>['type'=>'STRING','enum'=>HV_GROUPS],'who'=>['type'=>'STRING','enum'=>HV_WHO],
+        'priority'=>['type'=>'INTEGER'],'due'=>['type'=>'STRING'],'desc'=>['type'=>'STRING'],'projectId'=>['type'=>'STRING'],'reason'=>['type'=>'STRING']],
+        'required'=>['title','group','who','priority','due','desc','reason']];
+    $body = ['systemInstruction'=>['parts'=>[['text'=>$rules]]],
+        'contents'=>[['role'=>'user','parts'=>[['text'=>"Việc thô: ".$text]]]],
+        'generationConfig'=>['responseMimeType'=>'application/json','responseSchema'=>$schema,'temperature'=>0.2]];
+    $call = function(string $m) use ($key, $body) {
+        $ch = curl_init("https://generativelanguage.googleapis.com/v1beta/models/$m:generateContent");
+        curl_setopt_array($ch, [CURLOPT_POST=>true, CURLOPT_RETURNTRANSFER=>true, CURLOPT_TIMEOUT=>40,
+            CURLOPT_HTTPHEADER=>['Content-Type: application/json', 'x-goog-api-key: '.$key], CURLOPT_POSTFIELDS=>json_encode($body, JSON_UNESCAPED_UNICODE)]);
+        $r = curl_exec($ch); $code = curl_getinfo($ch, CURLINFO_HTTP_CODE); $err = curl_error($ch); curl_close($ch);
+        return [$code, $r, $err];
+    };
+    [$code, $r, $err] = $call($model);
+    if ($code === 404) { // model đổi tên → tự tìm model flash mới nhất
+        $ch = curl_init("https://generativelanguage.googleapis.com/v1beta/models?pageSize=100"); curl_setopt_array($ch,[CURLOPT_RETURNTRANSFER=>true,CURLOPT_HTTPHEADER=>['x-goog-api-key: '.$key],CURLOPT_TIMEOUT=>20]);
+        $list = json_decode((string)curl_exec($ch), true); curl_close($ch);
+        $names = array_map(fn($m)=>str_replace('models/','',$m['name']), $list['models'] ?? []);
+        $flash = array_values(array_filter($names, fn($n)=>str_contains($n,'flash') && !str_contains($n,'image') && !str_contains($n,'tts') && !str_contains($n,'live')));
+        rsort($flash);
+        if ($flash) { $model = $flash[0]; hv_set_setting('gemini_model', $model); [$code, $r, $err] = $call($model); }
+    }
+    if ($err) throw new RuntimeException('Không gọi được Gemini: '.$err);
+    $j = json_decode((string)$r, true);
+    if ($code !== 200) throw new RuntimeException('Gemini trả lỗi '.$code.': '.($j['error']['message'] ?? substr((string)$r,0,200)));
+    $txt = $j['candidates'][0]['content']['parts'][0]['text'] ?? '';
+    $out = json_decode($txt, true);
+    if (!is_array($out)) throw new RuntimeException('Gemini trả về không phải JSON.');
+    $out['priority'] = max(1, min(3, (int)($out['priority'] ?? 2)));
+    if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', (string)($out['due'] ?? ''))) $out['due'] = '';
+    if (!in_array($out['group'] ?? '', HV_GROUPS, true)) $out['group'] = 'quan-ly';
+    if (!in_array($out['who'] ?? '', HV_WHO, true)) $out['who'] = 'claude';
+    $usage = $j['usageMetadata']['totalTokenCount'] ?? 0;
+    if ($usage) hv_log_usage(hv_today(), ['gemini_tokens'=>(int)$usage], 'suggest', true);
+    $out['model'] = $model; $out['tokens'] = $usage;
+    return $out;
 }

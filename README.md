@@ -56,6 +56,11 @@ CẦN QUYẾT ĐỊNH: <câu hỏi cho Tuấn, hoặc "không">
 
 File sản phẩm để trên Google Drive, ghi link vào `resultLink`. Tiêu hao ghi vào `usage` của việc và `log_usage` cuối phiên. Agent không tự chuyển việc sang `xong`; Tuấn duyệt trên giao diện.
 
+## Nút trên giao diện
+
+- **✨ Gợi ý điền**: gửi mô tả thô cho Gemini (key dán ở ⚙ Cài đặt, lưu trong CSDL ngoài thư mục deploy), điền sẵn nhóm/giao cho/ưu tiên/hạn/mô tả theo quy tắc phân loại; Tuấn xem lại rồi bấm Thêm việc. Token Gemini dùng được cộng vào tab Tiêu hao.
+- **Nhờ Claude điền**: thêm việc thô với `who=claude`, nhãn `[Claude phân loại]`; quản gia Claude phân loại trong phiên sáng (skill `tuan-phan-tich-viec-moi`).
+
 ## API nhanh
 
 ```
@@ -64,6 +69,7 @@ GET  api.php?action=tasks&who=spark&status=moi
 POST api.php?action=tasks         {"title":"…","who":"gemini","projectId":"…","due":"2026-10-05"}
 POST api.php?action=task&id=<id>  {"status":"cho_duyet","result":"…","usage":{"gemini_tokens":12000}}
 POST api.php?action=usage         {"claude_tokens":30000,"note":"phiên sáng"}      (cộng dồn vào hôm nay)
+POST api.php?action=suggest        {"text":"mô tả thô"}   → các trường gợi ý (cần Gemini key)
 GET  api.php?action=log
 ```
 
