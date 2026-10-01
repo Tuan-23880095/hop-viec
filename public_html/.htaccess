@@ -10,4 +10,4 @@ RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
 <FilesMatch "^(config\.php|config\.sample\.php|lib\.php)$">
   Require all denied
 </FilesMatch>
-RedirectMatch 404 ^/data/
+RedirectMatch 404 /data/

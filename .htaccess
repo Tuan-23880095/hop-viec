@@ -1,0 +1,7 @@
+# Repo deploy thẳng vào document root: chuyển mọi request vào public_html/ và chặn các thư mục khác.
+Options -Indexes
+RewriteEngine On
+RewriteRule ^(setup|docs|web|\.git)(/|$) - [R=404,L]
+RewriteRule ^(README\.md|\.gitignore)$ - [R=404,L]
+RewriteCond %{REQUEST_URI} !^/public_html/
+RewriteRule ^(.*)$ public_html/$1 [L]

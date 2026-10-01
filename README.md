@@ -23,16 +23,14 @@ Claude Code ─────────┘                     └─ data/hopvi
 
 ## Deploy lên Hostinger (shared hosting, subdomain `hopviec.diemdanhsv.com`)
 
-1. **Tạo subdomain**: hPanel → Websites → diemdanhsv.com → *Subdomains* → tạo `hopviec`. Hostinger tạo thư mục `public_html/hopviec` (hoặc `domains/hopviec.diemdanhsv.com/public_html`).
-2. **Bật SSL** cho subdomain (hPanel → Security → SSL, thường tự động).
-3. **Deploy từ GitHub**: hPanel → Advanced → *Git* → Create new repository:
-   - Repository: `https://github.com/<user>/hop-viec.git`, branch `main`
-   - Install path: thư mục của subdomain (ví dụ `public_html/hopviec`)
-   - Sau khi deploy, vì code nằm trong thư mục con `public_html/` của repo, đặt **Document root** của subdomain trỏ vào `.../hopviec/public_html` (hPanel → Subdomains → sửa thư mục), hoặc dùng *Auto deployment* + webhook để mỗi lần push là cập nhật.
-4. Mở `https://hopviec.diemdanhsv.com/setup.php` → đặt mật khẩu → **ghi lại API key và MCP URL** (chỉ hiện một lần; sau này xem trong `config.php` bằng File Manager).
-5. Kiểm tra: `https://hopviec.diemdanhsv.com/` đăng nhập được; `curl -X POST <MCP URL> -H 'Content-Type: application/json' -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'` trả về danh sách tool.
+1. **Tạo subdomain** `hopviec` (hPanel → Websites → diemdanhsv.com → Subdomains). Hostinger tạo site riêng `hopviec.diemdanhsv.com` với document root `domains/hopviec.diemdanhsv.com/public_html`.
+2. **Bật SSL** cho subdomain (thường tự động).
+3. **Git deploy**: hPanel → website `hopviec.diemdanhsv.com` → Advanced → Git → Tiếp tục với GitHub → chọn repo `hop-viec`, nhánh `main`, **thư mục cài đặt: `public_html`** (đúng gốc web, không thêm cấp con). File `.htaccess` ở gốc repo tự chuyển mọi request vào thư mục `public_html/` của repo, nên URL sạch: `https://hopviec.diemdanhsv.com/setup.php`.
+4. Mở `https://hopviec.diemdanhsv.com/setup.php` → đặt mật khẩu → **ghi lại API key và MCP URL** (chỉ hiện một lần).
+   Config và CSDL được ghi vào `domains/hopviec.diemdanhsv.com/hopviec-data/` (ngoài thư mục deploy) nên auto-deploy sau này không xoá mất.
+5. Kiểm tra: đăng nhập được ở `https://hopviec.diemdanhsv.com/`; `curl -X POST <MCP URL> -H 'Content-Type: application/json' -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'` trả về danh sách tool.
 
-Yêu cầu PHP ≥ 8.1 với extension `pdo_sqlite` (Hostinger bật sẵn). Đặt phiên bản PHP trong hPanel → PHP Configuration nếu đang < 8.1.
+Yêu cầu PHP ≥ 8.1 với `pdo_sqlite` (Hostinger bật sẵn).
 
 ## Nối các AI vào cùng một kho
 

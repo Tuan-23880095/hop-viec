@@ -5,10 +5,25 @@ mb_internal_encoding('UTF-8');
 date_default_timezone_set('Asia/Ho_Chi_Minh');
 
 define('HV_ROOT', __DIR__);
-define('HV_DATA', HV_ROOT . '/data');
-define('HV_CONFIG', HV_ROOT . '/config.php');
-
-if (!is_dir(HV_DATA)) { @mkdir(HV_DATA, 0755, true); }
+// Dữ liệu + config nằm NGOÀI thư mục deploy (để Git auto-deploy không xoá mất):
+// đi lên từ thư mục app, tìm thư mục 'public_html' cao nhất và dùng <cha của nó>/hopviec-data.
+// Ví dụ Hostinger: domains/hopviec.diemdanhsv.com/public_html/... -> domains/hopviec.diemdanhsv.com/hopviec-data
+// Có thể ép bằng biến môi trường HV_DATA_DIR. Nếu không ghi được thì dùng <app>/data.
+function hv_data_dir(): string {
+    static $dir = null; if ($dir) return $dir;
+    $cands = [];
+    if (!empty($_SERVER['HV_DATA_DIR'])) $cands[] = $_SERVER['HV_DATA_DIR'];
+    elseif (getenv('HV_DATA_DIR')) $cands[] = getenv('HV_DATA_DIR');
+    $top = null; $d = HV_ROOT;
+    for ($i = 0; $i < 6; $i++) { if (basename($d) === 'public_html') $top = $d; $parent = dirname($d); if ($parent === $d) break; $d = $parent; }
+    if ($top) $cands[] = dirname($top) . '/hopviec-data';
+    $cands[] = HV_ROOT . '/data';
+    foreach ($cands as $c) { if (!is_dir($c)) @mkdir($c, 0750, true); if (is_dir($c) && is_writable($c)) return $dir = $c; }
+    return $dir = HV_ROOT . '/data';
+}
+define('HV_DATA', hv_data_dir());
+define('HV_CONFIG', HV_DATA . '/config.php');
+if (!file_exists(HV_DATA . '/.htaccess')) @file_put_contents(HV_DATA . '/.htaccess', "Require all denied\n");
 
 function hv_config(): ?array {
     if (!file_exists(HV_CONFIG)) return null;
