@@ -1,4 +1,5 @@
 public_html/config.php
 public_html/data/*.sqlite*
+hopviec-data/
 setup/logs/
 node_modules/
