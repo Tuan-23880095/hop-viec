@@ -79,8 +79,8 @@ try {
             hv_json(hv_gemini_test());
         case 'settings':
             if (!$viaSession) hv_json(['error'=>'Chỉ Tuấn (đăng nhập giao diện) mới đổi cài đặt'], 403);
-            if ($method === 'GET') { $k = hv_setting('gemini_api_key'); hv_json(['gemini_api_key_masked'=> $k === '' ? '' : substr($k,0,6).'…'.substr($k,-4), 'gemini_model'=>hv_setting('gemini_model','gemini-flash-latest')]); }
-            if ($method === 'POST') { if (isset($body['gemini_api_key']) && $body['gemini_api_key'] !== '') hv_set_setting('gemini_api_key', trim((string)$body['gemini_api_key'])); if (!empty($body['gemini_model'])) hv_set_setting('gemini_model', trim((string)$body['gemini_model'])); hv_json(['ok'=>true]); }
+            if ($method === 'GET') { $k = hv_setting('gemini_api_key'); hv_json(['gemini_api_key_masked'=> $k === '' ? '' : substr($k,0,6).'…'.substr($k,-4), 'gemini_auto'=>hv_gemini_auto_info()]); }
+            if ($method === 'POST') { if (isset($body['gemini_api_key']) && $body['gemini_api_key'] !== '') hv_set_setting('gemini_api_key', trim((string)$body['gemini_api_key'])); if (isset($body['gemini_api_key']) && $body['gemini_api_key'] !== '') { hv_set_setting('gemini_auto', '{}'); hv_set_setting('gemini_last_ok', ''); } hv_json(['ok'=>true]); }
             break;
         case 'log':
             $st = hv_db()->prepare('SELECT * FROM log ORDER BY id DESC LIMIT ?'); $st->bindValue(1, min(500,(int)($_GET['limit'] ?? 100)), PDO::PARAM_INT); $st->execute();

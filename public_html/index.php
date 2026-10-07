@@ -143,7 +143,7 @@ button.link{border:0;background:none;color:var(--accent);padding:2px 0;font-weig
 
 <div class="form" id="settings" hidden>
   <label>Gemini API key (cho nút Gợi ý điền; lấy tại aistudio.google.com/app/apikey)<input type="password" id="set-key" placeholder="dán key mới; để trống nếu giữ nguyên" autocomplete="off"></label>
-  <label>Model Gemini<input id="set-model" placeholder="gemini-flash-latest"></label>
+  <div class="hint">Model: <b>tự chọn</b>. Hộp việc hỏi Google các model key này dùng được, chọn bản flash mới nhất và tự đổi sang model khác khi một model hết lượt.<br><span id="set-model-info"></span></div>
   <div class="hint wide" id="set-info"></div>
   <div class="hint wide" id="set-test-out" hidden></div>
   <div class="actions"><button id="set-close">Đóng</button><button id="set-test">Kiểm tra key</button><button class="primary" id="set-save">Lưu cài đặt</button></div>
@@ -163,7 +163,7 @@ button.link{border:0;background:none;color:var(--accent);padding:2px 0;font-weig
       <label>Hạn<input type="date" id="nt-due"></label>
       <label class="wide">Mô tả / yêu cầu đầu ra<textarea id="nt-desc" placeholder="Agent cần trả về gì? Nguồn ở notebook nào? Giới hạn độ dài?"></textarea></label>
       <div class="hint wide" id="nt-reason" hidden></div>
-      <div class="actions"><button id="nt-claude" title="Thêm việc thô, Claude quản gia sẽ phân loại trong phiên sáng">Nhờ Claude điền</button><button id="nt-suggest" title="Gemini phân tích mô tả và điền sẵn các ô (anh duyệt rồi mới Thêm)">✨ Gợi ý điền</button><button class="primary" id="nt-add">Thêm việc</button></div>
+      <div class="actions"><button id="nt-claude" title="Thêm việc thô, Claude quản gia sẽ phân loại trong phiên sáng">Nhờ Claude điền</button><button id="nt-suggest" title="Gemini phân tích mô tả và điền sẵn các ô (thầy duyệt rồi mới Thêm)">✨ Gợi ý điền</button><button class="primary" id="nt-add">Thêm việc</button></div>
     </div>
     <div class="toolbar">
       <select id="f-who"><option value="">Mọi agent</option></select>
@@ -505,15 +505,15 @@ function wire(){
     await write({action:"tasks"},{title:text.split("\n")[0].slice(0,90),desc:"[Claude phân loại] "+text,who:"claude",priority:2,group:$("#nt-group").value,projectId:$("#nt-project").value},"Đã giao Claude quản gia phân loại (phiên sáng)");
     $("#nt-title").value="";$("#nt-desc").value="";
   };
-  $("#settings-btn").onclick=async()=>{const p=$("#settings");p.hidden=!p.hidden;if(!p.hidden){try{const r=await api("settings");$("#set-model").value=r.gemini_model||"";$("#set-info").textContent=r.gemini_api_key_masked?"Key hiện có: "+r.gemini_api_key_masked:"Chưa có key.";}catch(e){$("#set-info").textContent=e.message}}};
+  $("#settings-btn").onclick=async()=>{const p=$("#settings");p.hidden=!p.hidden;if(!p.hidden){try{const r=await api("settings");const g=r.gemini_auto||{};$("#set-model-info").textContent=g.last_ok?"Đang dùng: "+g.last_ok:(g.candidates&&g.candidates.length?"Sẽ thử: "+g.candidates.join(", "):"Chưa chọn (bấm Kiểm tra key).");$("#set-info").textContent=r.gemini_api_key_masked?"Key hiện có: "+r.gemini_api_key_masked:"Chưa có key.";}catch(e){$("#set-info").textContent=e.message}}};
   $("#set-close").onclick=()=>{$("#settings").hidden=true};
   $("#set-test").onclick=async()=>{const o=$("#set-test-out"),b=$("#set-test");o.hidden=false;o.style.color="";o.textContent="Đang gọi thử Gemini…";b.disabled=true;
-    try{if($("#set-key").value.trim()||$("#set-model").value.trim()){await api("settings","POST",{gemini_api_key:$("#set-key").value,gemini_model:$("#set-model").value});$("#set-key").value="";}
+    try{if($("#set-key").value.trim()){await api("settings","POST",{gemini_api_key:$("#set-key").value});$("#set-key").value="";}
       const r=await api("gemini_test");o.style.color=r.ok?"var(--good)":"var(--bad)";
-      o.textContent=(r.ok?"✓ ":"✗ ")+r.message+(r.models&&r.models.length?" Model dùng được: "+r.models.join(", ")+".":"");
-      if(r.ok)$("#set-model").value=r.model||$("#set-model").value;
+      o.textContent=(r.ok?"✓ ":"✗ ")+r.message+(r.tried&&r.tried.length>1?" Đã thử: "+r.tried.join(", ")+".":"")+(r.models&&r.models.length?" Key dùng được: "+r.models.join(", ")+".":"");
+      if(r.ok)$("#set-model-info").textContent="Đang dùng: "+r.model;
     }catch(e){o.style.color="var(--bad)";o.textContent="✗ "+e.message}finally{b.disabled=false}};
-  $("#set-save").onclick=async()=>{try{await api("settings","POST",{gemini_api_key:$("#set-key").value,gemini_model:$("#set-model").value});$("#set-key").value="";toast("Đã lưu cài đặt");$("#settings").hidden=true;}catch(e){toast(e.message)}};
+  $("#set-save").onclick=async()=>{try{await api("settings","POST",{gemini_api_key:$("#set-key").value});$("#set-key").value="";toast("Đã lưu cài đặt");$("#settings").hidden=true;}catch(e){toast(e.message)}};
   $("#np-add").onclick=async()=>{
     const name=$("#np-name").value.trim();if(!name){toast("Nhập tên dự án");return;}
     await write({action:"projects"},{name,group:$("#np-group").value,due:$("#np-due").value||"",goal:$("#np-goal").value},"Đã thêm dự án");

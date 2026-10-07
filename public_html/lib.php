@@ -250,27 +250,48 @@ function hv_gemini_call(string $key, string $model, array $body, int $timeout = 
     $r = curl_exec($ch); $code = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE); $err = curl_error($ch); curl_close($ch);
     return [$code, json_decode((string)$r, true), $err, (string)$r];
 }
-// Danh sách model flash dùng được với key (để tự chọn khi model cũ bị gỡ).
+// Xếp hạng tên model văn bản dòng flash (hàm thuần, dễ kiểm thử).
+// Giữ: gemini-X.Y-flash, gemini-X.Y-flash-lite, gemini-flash-latest, gemini-flash-lite-latest.
+// Loại: preview/exp (hạn mức thấp), omni, image, tts, live, audio, embedding…
+// Thứ tự: flash thường bản cao nhất → alias flash-latest → flash-lite bản cao nhất → flash-lite-latest.
+function hv_gemini_rank(array $names): array {
+    $keep = [];
+    foreach ($names as $n) {
+        $n = str_replace('models/', '', (string)$n);
+        if (preg_match('/omni|image|tts|live|audio|embedding|robotics|learnlm|preview|exp|transcribe|translate/', $n)) continue;
+        if (preg_match('/^gemini-(\d+(\.\d+)?)-flash(-lite)?$/', $n) || preg_match('/^gemini-flash(-lite)?-latest$/', $n)) $keep[] = $n;
+    }
+    $keep = array_values(array_unique($keep));
+    usort($keep, function($a, $b) {
+        $k = function($n) { $lite = str_contains($n, 'lite') ? 1 : 0; $alias = str_ends_with($n, '-latest') ? 1 : 0;
+            $v = preg_match('/^gemini-(\d+(?:\.\d+)?)/', $n, $m) ? (float)$m[1] : 0; return [$lite, $alias, -$v, $n]; };
+        return $k($a) <=> $k($b);
+    });
+    return $keep;
+}
+// Hỏi Google danh sách model key này gọi được.
 function hv_gemini_models(string $key): array {
     $ch = curl_init('https://generativelanguage.googleapis.com/v1beta/models?pageSize=200');
     curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER=>true, CURLOPT_HTTPHEADER=>['x-goog-api-key: '.$key], CURLOPT_TIMEOUT=>20, CURLOPT_CONNECTTIMEOUT=>10]);
     $r = curl_exec($ch); $code = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE); $err = curl_error($ch); curl_close($ch);
     $j = json_decode((string)$r, true);
     $names = [];
-    foreach ($j['models'] ?? [] as $m) {
-        if (!in_array('generateContent', $m['supportedGenerationMethods'] ?? [], true)) continue;
-        $n = str_replace('models/', '', (string)$m['name']);
-        // chỉ nhận model văn bản dòng flash: gemini-X.Y-flash[-lite][-preview…], gemini-flash[-lite]-latest; loại omni/image/tts/live…
-        if (preg_match('/omni|image|tts|live|audio|embedding|robotics|learnlm/', $n)) continue;
-        if (!preg_match('/^gemini-(\d+(\.\d+)?-flash(-lite)?(-preview[\w-]*)?|flash(-lite)?-latest)$/', $n)) continue;
-        $names[] = $n;
+    foreach ($j['models'] ?? [] as $m) if (in_array('generateContent', $m['supportedGenerationMethods'] ?? [], true)) $names[] = (string)$m['name'];
+    return ['code'=>$code, 'err'=>$err, 'error'=>$j['error']['message'] ?? '', 'status'=>$j['error']['status'] ?? '', 'models'=>hv_gemini_rank($names)];
+}
+const HV_GEMINI_FALLBACK = ['gemini-flash-latest', 'gemini-3.8-flash', 'gemini-3.5-flash', 'gemini-3.5-flash-lite', 'gemini-flash-lite-latest'];
+// Tự chọn model: danh sách ứng viên theo thứ tự ưu tiên, lưu đệm trong ngày. Model chạy được lần trước đứng đầu.
+function hv_gemini_candidates(string $key, bool $refresh = false): array {
+    $cache = json_decode(hv_setting('gemini_auto', '{}'), true) ?: [];
+    if (!$refresh && ($cache['day'] ?? '') === hv_today() && !empty($cache['models'])) $list = $cache['models'];
+    else {
+        $ls = hv_gemini_models($key);
+        $list = ($ls['code'] === 200 && $ls['models']) ? $ls['models'] : HV_GEMINI_FALLBACK;
+        hv_set_setting('gemini_auto', json_encode(['day'=>hv_today(), 'models'=>$list, 'from'=>($ls['code'] === 200 ? 'google' : 'fallback')]));
     }
-    // xếp: bản chính thức trước preview, phiên bản cao trước, thường trước lite
-    usort($names, function($a, $b) {
-        $va = preg_match('/gemini-(\d+(?:\.\d+)?)/', $a, $ma) ? (float)$ma[1] : 0; $vb = preg_match('/gemini-(\d+(?:\.\d+)?)/', $b, $mb) ? (float)$mb[1] : 0;
-        return [str_contains($a,'preview'), $vb, str_contains($a,'lite'), $a] <=> [str_contains($b,'preview'), $va, str_contains($b,'lite'), $b];
-    });
-    return ['code'=>$code, 'err'=>$err, 'error'=>$j['error']['message'] ?? '', 'status'=>$j['error']['status'] ?? '', 'models'=>$names];
+    $ok = hv_setting('gemini_last_ok');
+    if ($ok !== '' && in_array($ok, $list, true)) $list = array_values(array_unique(array_merge([$ok], $list)));
+    return $list;
 }
 // Lời giải thích dễ hiểu cho lỗi Gemini.
 function hv_gemini_explain(int $code, ?array $j, string $err, string $raw): string {
@@ -284,12 +305,31 @@ function hv_gemini_explain(int $code, ?array $j, string $err, string $raw): stri
     return 'Gemini trả lỗi ' . $code . ($status ? " ($status)" : '') . ': ' . $msg;
 }
 
+// Gọi Gemini, tự thử lần lượt các model ứng viên (model bị gỡ/không cấp cho key, hết hạn mức, quá tải → model kế tiếp).
+function hv_gemini_generate(string $key, array $body, int $maxTries = 4, int $budgetSec = 50): array {
+    $cands = hv_gemini_candidates($key); $tried = []; $last = null; $t0 = microtime(true); $refreshed = false;
+    for ($i = 0; $i < count($cands) && count($tried) < $maxTries && microtime(true) - $t0 < $budgetSec; $i++) {
+        $m = $cands[$i]; $tried[] = $m;
+        [$code, $j, $err, $raw] = hv_gemini_call($key, $m, $body);
+        $last = [$code, $j, $err, $raw];
+        if ($code === 200) { hv_set_setting('gemini_last_ok', $m); return ['ok'=>true, 'model'=>$m, 'json'=>$j, 'tried'=>$tried]; }
+        $msg = (string)($j['error']['message'] ?? '');
+        $reason = ''; foreach ($j['error']['details'] ?? [] as $d) if (!empty($d['reason'])) $reason = (string)$d['reason'];
+        if ($reason === 'API_KEY_INVALID' || stripos($msg, 'API key not valid') !== false || $code === 401) break; // key hỏng: đổi model vô ích
+        if ($m === hv_setting('gemini_last_ok')) hv_set_setting('gemini_last_ok', '');
+        $modelGone = $code === 404 || ($code === 400 && preg_match('/model|not found|not supported|no longer available|new users/i', $msg));
+        if ($modelGone && !$refreshed) { $refreshed = true; // danh sách cũ: hỏi lại Google rồi chèn ứng viên mới
+            foreach (hv_gemini_candidates($key, true) as $n) if (!in_array($n, $cands, true)) $cands[] = $n; }
+        if ($err !== '' && stripos($err, 'timed out') !== false) break; // quá giờ: dừng kẻo trang treo
+        if (!($modelGone || $code === 429 || $code === 403 || $code >= 500 || $err !== '')) break; // lỗi khác: dừng
+    }
+    return ['ok'=>false, 'last'=>$last, 'tried'=>$tried];
+}
+
 function hv_suggest(string $text, array $projects = []): array {
     @set_time_limit(150);
     $key = trim(hv_setting('gemini_api_key'));
     if ($key === '') throw new RuntimeException('Chưa có Gemini API key. Vào mục Cài đặt (⚙) để dán key.');
-    $model = trim(hv_setting('gemini_model', 'gemini-flash-latest')) ?: 'gemini-flash-latest';
-    if (preg_match('/omni|image|tts|live|audio/', $model) || !str_starts_with($model, 'gemini-')) $model = 'gemini-flash-latest'; // vd. gemini-omni-flash-preview chỉ có 4 lượt
     $rules = str_replace('{TODAY}', hv_today(), HV_TRIAGE_RULES);
     if ($projects) $rules .= "\nDự án hiện có (projectId: tên): " . implode('; ', array_map(fn($p)=>$p['id'].': '.$p['name'], $projects)) . ". Chọn projectId nếu việc thuộc dự án nào, không thì rỗng.";
     $schema = ['type'=>'OBJECT','properties'=>[
@@ -299,29 +339,9 @@ function hv_suggest(string $text, array $projects = []): array {
     $body = ['systemInstruction'=>['parts'=>[['text'=>$rules]]],
         'contents'=>[['role'=>'user','parts'=>[['text'=>"Việc thô: ".$text]]]],
         'generationConfig'=>['responseMimeType'=>'application/json','responseSchema'=>$schema,'temperature'=>0.2]];
-
-    // Thử model đang chọn; nếu model bị gỡ, quá tải hoặc hết hạn mức thì thử lần lượt model dự phòng.
-    $tried = []; $candidates = array_values(array_unique([$model, 'gemini-flash-latest', 'gemini-flash-lite-latest']));
-    $last = null; $used = ''; $t0 = microtime(true);
-    for ($i = 0; $i < count($candidates) && count($tried) < 4 && microtime(true) - $t0 < 45; $i++) {
-        $m = $candidates[$i]; $tried[] = $m;
-        [$code, $j, $err, $raw] = hv_gemini_call($key, $m, $body);
-        $last = [$code, $j, $err, $raw];
-        if ($code === 200) { $used = $m; break; }
-        $msg = (string)($j['error']['message'] ?? '');
-        $reason = ''; foreach ($j['error']['details'] ?? [] as $d) if (!empty($d['reason'])) $reason = (string)$d['reason'];
-        if ($reason === 'API_KEY_INVALID' || $code === 401 || $code === 403) break; // key hỏng: đổi model vô ích
-        $modelGone = $code === 404 || ($code === 400 && preg_match('/model|not found|not supported/i', $msg));
-        if ($modelGone && $i === 0) { // tìm model flash mới nhất mà key dùng được
-            $list = hv_gemini_models($key)['models'];
-            array_splice($candidates, 1, 0, array_values(array_diff(array_slice($list, 0, 2), $candidates)));
-        }
-        if ($err !== '' && stripos($err, 'timed out') !== false) break; // quá giờ: không thử tiếp kẻo trang treo
-        if (!($modelGone || $code === 429 || $code >= 500 || $err !== '')) break; // lỗi khác (vd. yêu cầu sai): dừng
-    }
-    [$code, $j, $err, $raw] = $last;
-    if ($code !== 200) throw new RuntimeException(hv_gemini_explain($code, $j, $err, $raw) . ' (đã thử: ' . implode(', ', $tried) . ')');
-    if ($used !== $model) hv_set_setting('gemini_model', $used); // nhớ model chạy được
+    $g = hv_gemini_generate($key, $body);
+    if (!$g['ok']) { [$code, $j, $err, $raw] = $g['last']; throw new RuntimeException(hv_gemini_explain($code, $j, $err, $raw) . ' (đã thử: ' . implode(', ', $g['tried']) . ')'); }
+    $j = $g['json']; $used = $g['model'];
 
     $txt = '';
     foreach ($j['candidates'][0]['content']['parts'] ?? [] as $part) if (empty($part['thought']) && isset($part['text'])) $txt .= $part['text'];
@@ -341,23 +361,23 @@ function hv_suggest(string $text, array $projects = []): array {
     return $out;
 }
 
-// Kiểm tra key Gemini: liệt kê model và gọi thử một câu ngắn.
+// Kiểm tra key: hỏi lại danh sách model của key và gọi thử (tự chọn model).
 function hv_gemini_test(): array {
-    @set_time_limit(90);
+    @set_time_limit(120);
     $key = trim(hv_setting('gemini_api_key'));
     if ($key === '') return ['ok'=>false, 'message'=>'Chưa có key. Dán key rồi bấm Lưu cài đặt trước.'];
-    $model = trim(hv_setting('gemini_model', 'gemini-flash-latest')) ?: 'gemini-flash-latest';
-    if (preg_match('/omni|image|tts|live|audio/', $model)) { $model = 'gemini-flash-latest'; hv_set_setting('gemini_model', $model); }
     $ls = hv_gemini_models($key);
     if ($ls['code'] !== 200) return ['ok'=>false, 'step'=>'list', 'message'=>hv_gemini_explain($ls['code'], ['error'=>['message'=>$ls['error'],'status'=>$ls['status']]], $ls['err'], '')];
-    [$code, $j, $err, $raw] = hv_gemini_call($key, $model, ['contents'=>[['role'=>'user','parts'=>[['text'=>'Trả lời đúng một chữ: OK']]]]], 30);
-    if ($code !== 200 && $ls['models']) { // model đang lưu không chạy: thử model tốt nhất key dùng được
-        foreach (array_unique(array_merge(['gemini-flash-latest'], $ls['models'])) as $m2) { if ($m2 === $model) continue;
-            [$code, $j, $err, $raw] = hv_gemini_call($key, $m2, ['contents'=>[['role'=>'user','parts'=>[['text'=>'Trả lời đúng một chữ: OK']]]]], 30);
-            if ($code === 200) { $model = $m2; hv_set_setting('gemini_model', $model); break; } }
-    }
-    if ($code !== 200) return ['ok'=>false, 'step'=>'generate', 'model'=>$model, 'models'=>array_slice($ls['models'],0,12), 'message'=>hv_gemini_explain($code, $j, $err, $raw)];
-    return ['ok'=>true, 'model'=>$model, 'models'=>array_slice($ls['models'],0,12), 'message'=>'Key hoạt động với model '.$model.'.'];
+    hv_set_setting('gemini_auto', json_encode(['day'=>hv_today(), 'models'=>$ls['models'] ?: HV_GEMINI_FALLBACK, 'from'=>'google']));
+    $g = hv_gemini_generate($key, ['contents'=>[['role'=>'user','parts'=>[['text'=>'Trả lời đúng một chữ: OK']]]]], 5, 80);
+    $models = array_slice($ls['models'], 0, 8);
+    if (!$g['ok']) { [$code, $j, $err, $raw] = $g['last']; return ['ok'=>false, 'step'=>'generate', 'models'=>$models, 'tried'=>$g['tried'], 'message'=>hv_gemini_explain($code, $j, $err, $raw)]; }
+    return ['ok'=>true, 'model'=>$g['model'], 'models'=>$models, 'tried'=>$g['tried'], 'message'=>'Key hoạt động. Hộp việc tự chọn model ' . $g['model'] . '.'];
+}
+// Thông tin model tự chọn để hiện trong Cài đặt.
+function hv_gemini_auto_info(): array {
+    $c = json_decode(hv_setting('gemini_auto', '{}'), true) ?: [];
+    return ['last_ok'=>hv_setting('gemini_last_ok'), 'candidates'=>array_slice($c['models'] ?? [], 0, 5), 'day'=>$c['day'] ?? ''];
 }
 
 // ---------- Duyệt kết quả agent ----------
