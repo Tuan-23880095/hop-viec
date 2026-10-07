@@ -100,6 +100,27 @@ td.r,th.r{text-align:right}
 .who-claude{--who:var(--c-claude)}.who-gemini{--who:var(--c-gemini)}.who-notebooklm{--who:var(--c-notebooklm)}.who-antigravity{--who:var(--c-antigravity)}.who-spark{--who:var(--c-spark)}.who-co-van{--who:var(--c-co-van)}.who-tuan{--who:var(--c-tuan)}
 @media(prefers-reduced-motion:reduce){*{transition:none!important}}
 body{margin:0}img{max-width:100%}[hidden]{display:none!important}
+.tabs .badge{display:inline-block;min-width:18px;padding:0 5px;margin-left:4px;border-radius:999px;background:var(--warn);color:var(--panel);font-size:11px;font-weight:700;text-align:center}
+.tile.link{cursor:pointer}.tile.link:hover{border-color:var(--accent)}
+.rlist{display:grid;gap:10px;max-width:900px}
+.rcard{background:var(--panel);border:1px solid var(--line);border-left:4px solid var(--who,var(--line));border-radius:var(--r);padding:12px 14px;display:grid;gap:8px;min-width:0;scroll-margin-top:12px}
+.rcard.flash{outline:2px solid var(--accent)}
+.rcard .t{font-size:15px;font-weight:600;overflow-wrap:anywhere}
+.rcard .m{display:flex;flex-wrap:wrap;gap:6px;font-size:12px;color:var(--muted);align-items:center}
+.rblock{font-size:13px;min-width:0}
+.rblock .eyebrow{margin-bottom:2px}
+.rblock p{margin:0;white-space:pre-wrap;overflow-wrap:anywhere}
+.rblock.clamp p{display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden}
+.rblock.q{background:var(--panel-2);border-radius:var(--r);padding:6px 8px}
+.rblock.q.need p{color:var(--warn);font-weight:600}
+.rlinks{display:flex;flex-wrap:wrap;gap:6px}
+.rlinks a{display:inline-flex;align-items:center;gap:4px;border:1px solid var(--line);border-radius:var(--r);padding:4px 10px;color:var(--accent);text-decoration:none;font-weight:600;font-size:13px;overflow-wrap:anywhere}
+.rlinks a:hover{border-color:var(--accent)}
+.ractions{display:flex;flex-wrap:wrap;gap:6px;align-items:center;border-top:1px solid var(--line);padding-top:8px}
+.ractions .grow{flex:1}
+button.ok{background:var(--good);color:var(--panel);border-color:transparent;font-weight:600}
+button.link{border:0;background:none;color:var(--accent);padding:2px 0;font-weight:600;font-size:12px;justify-self:start;text-align:left}
+.rdone{font-size:13px;color:var(--muted);display:grid;gap:4px}
 .login{max-width:360px;margin:60px auto;display:grid;gap:10px;background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:20px}
 </style></head><body>
 <div class="login" id="login" hidden><h2>Đăng nhập Hộp việc</h2><label>Mật khẩu<input type="password" id="pw" autocomplete="current-password"></label><button class="primary" id="pw-go">Vào</button><div class="hint" id="pw-msg"></div></div>
@@ -112,6 +133,7 @@ body{margin:0}img{max-width:100%}[hidden]{display:none!important}
   </div>
   <nav class="tabs" role="tablist">
     <button role="tab" aria-selected="true" data-tab="tasks" id="tab-tasks">Việc</button>
+    <button role="tab" aria-selected="false" data-tab="review" id="tab-review">Chờ duyệt<span class="badge" id="review-badge" hidden></span></button>
     <button role="tab" aria-selected="false" data-tab="projects" id="tab-projects">Dự án</button>
     <button role="tab" aria-selected="false" data-tab="usage" id="tab-usage">Tiêu hao</button>
   </nav>
@@ -121,9 +143,10 @@ body{margin:0}img{max-width:100%}[hidden]{display:none!important}
 
 <div class="form" id="settings" hidden>
   <label>Gemini API key (cho nút Gợi ý điền; lấy tại aistudio.google.com/app/apikey)<input type="password" id="set-key" placeholder="dán key mới; để trống nếu giữ nguyên" autocomplete="off"></label>
-  <label>Model Gemini<input id="set-model" placeholder="gemini-2.5-flash"></label>
+  <label>Model Gemini<input id="set-model" placeholder="gemini-flash-latest"></label>
   <div class="hint wide" id="set-info"></div>
-  <div class="actions"><button id="set-close">Đóng</button><button class="primary" id="set-save">Lưu cài đặt</button></div>
+  <div class="hint wide" id="set-test-out" hidden></div>
+  <div class="actions"><button id="set-close">Đóng</button><button id="set-test">Kiểm tra key</button><button class="primary" id="set-save">Lưu cài đặt</button></div>
 </div>
 <div class="strip" id="strip"></div>
 
@@ -149,6 +172,12 @@ body{margin:0}img{max-width:100%}[hidden]{display:none!important}
       <label style="display:flex;gap:6px;align-items:center;font-size:13px;color:var(--fg)"><input type="checkbox" id="f-done" style="width:auto"> hiện việc đã xong</label>
     </div>
     <div class="board" id="board"></div>
+  </section>
+
+  <section id="sec-review" hidden>
+    <p class="hint" style="margin:0 0 10px">Kết quả agent đã nộp. <b>Duyệt</b> chuyển việc sang Xong; <b>Trả lại</b> chuyển về Đang làm và chèn ghi chú của thầy lên đầu mô tả. Mỗi việc có link riêng (nút 🔗) để mở thẳng từ báo cáo hay tin nhắn.</p>
+    <div class="rlist" id="rlist"></div>
+    <div class="rdone" id="rdone" hidden></div>
   </section>
 
   <section id="sec-projects" hidden>
@@ -235,11 +264,12 @@ function renderStrip(){
   const pct=k=>budgets[k]?Math.round(100*(m[k]||0)/budgets[k]):0;
   $("#strip").innerHTML=[
     ["Việc đang mở",open.length,late?`${late} quá hạn`:"không quá hạn",late?"bad":""],
-    ["Chờ Tuấn duyệt",review,"kết quả agent đã trả",""],
+    ["Chờ Tuấn duyệt",review,review?"bấm để duyệt →":"kết quả agent đã trả","review"],
     ["Claude tháng này",pct("claude_tokens")+"%",fmt(m.claude_tokens)+" / "+fmt(budgets.claude_tokens)+" token",pct("claude_tokens")>80?"bad":""],
     ["Gemini API",pct("gemini_tokens")+"%",fmt(m.gemini_tokens)+" token",""],
     ["NotebookLM hôm nay",(usage.find(u=>u.id===today())||{}).nlm_queries||0,"/ 50 truy vấn (free)",""]
-  ].map(([l,v,s,c])=>`<div class="tile"><div class="eyebrow">${l}</div><div class="v num" style="${c==="bad"?"color:var(--bad)":""}">${v}</div><div class="s">${s}</div></div>`).join("");
+  ].map(([l,v,s,c])=>`<div class="tile${c==="review"?" link":""}" ${c==="review"?'data-go="#duyet" tabindex="0" role="link"':""}><div class="eyebrow">${l}</div><div class="v num" style="${c==="bad"?"color:var(--bad)":(c==="review"&&v?"color:var(--warn)":"")}">${v}</div><div class="s">${s}</div></div>`).join("");
+  const b=$("#review-badge");b.hidden=!review;b.textContent=review;
 }
 function monthTotals(){
   const ym=today().slice(0,7), out={};
@@ -284,9 +314,11 @@ function renderDrawer(){
   <div><div class="eyebrow">Kết quả agent trả về</div><div class="result">${t.result?esc(t.result):'<span class="hint">Chưa có. Agent sẽ ghi vào trường <span class="num">result</span>; link sản phẩm ở <span class="num">resultLink</span>.</span>'}</div>
   ${t.resultLink?`<div class="hint" style="margin-top:4px;overflow-wrap:anywhere">Sản phẩm: <a href="${esc(t.resultLink)}" target="_blank" rel="noopener">${esc(t.resultLink)}</a></div>`:""}</div>
   <div class="hint">Tiêu hao cho việc này: ${USAGE_KEYS.filter(k=>u[k]).map(k=>`<span class="num">${fmt(u[k])}</span> ${USAGE_LABEL[k].toLowerCase()}`).join(" · ")||"chưa ghi"}</div>
-  <div class="hint num">id: ${esc(t.id)} · tạo ${esc((t.createdAt||"").slice(0,16).replace("T"," "))}${t.updatedAt?" · sửa "+esc(t.updatedAt.slice(0,16).replace("T"," ")):""}</div>
+  <div class="hint num">id: ${esc(t.id)} · tạo ${esc((t.created_at||"").slice(0,16).replace("T"," "))}${t.updated_at?" · sửa "+esc(t.updated_at.slice(0,16).replace("T"," ")):""}</div>
+  ${t.status==="cho_duyet"?`<button class="ok" id="d-review">Duyệt / trả lại việc này →</button>`:""}
   <div class="actions"><button id="d-del">Xoá</button><button class="primary" id="d-save">Lưu</button></div>`;
-  $("#d-close").onclick=()=>{sel=null;renderBoard();renderDrawer()};
+  $("#d-close").onclick=()=>{sel=null;renderBoard();renderDrawer();if(location.hash.startsWith("#viec-"))history.replaceState(null,"",location.pathname)};
+  if($("#d-review"))$("#d-review").onclick=()=>{location.hash="#duyet-"+t.id};
   $("#d-save").onclick=async()=>{
     await write({action:"task",qs:{id:t.id}},{status:$("#d-status").value,who:$("#d-who").value,priority:+$("#d-pri").value,due:$("#d-due").value||"",desc:$("#d-desc").value},"Đã lưu");
   };
@@ -294,6 +326,87 @@ function renderDrawer(){
     if(d.dataset.confirm!==t.id){d.dataset.confirm=t.id;$("#d-del").textContent="Bấm lần nữa để xoá";return;}
     sel=null;await write({action:"task",method:"DELETE",qs:{id:t.id}},{id:t.id},"Đã xoá");
   };
+}
+
+// ---------- Chờ duyệt ----------
+const rstate={}; let reviewedRecent=[]; let flashId=null;
+function parseResult(r){
+  r=String(r||"").trim(); const iV=r.search(/VẤN ĐỀ\s*:/), iQ=r.search(/CẦN QUYẾT ĐỊNH\s*:/);
+  const ends=[iV,iQ].filter(i=>i>=0).sort((a,b)=>a-b);
+  const kq=r.slice(0,ends.length?ends[0]:undefined).replace(/^KẾT QUẢ\s*:\s*/,"").trim();
+  const vd=iV>=0?r.slice(iV,iQ>iV?iQ:undefined).replace(/^VẤN ĐỀ\s*:\s*/,"").trim():"";
+  const qd=iQ>=0?r.slice(iQ,iV>iQ?iV:undefined).replace(/^CẦN QUYẾT ĐỊNH\s*:\s*/,"").trim():"";
+  return {kq,vd,qd};
+}
+const needDecision=qd=>!!qd&&!/^không\b/i.test(qd);
+function linkLabel(u){
+  let m=u.match(/github\.com\/[^/]+\/([^/]+)\/pull\/(\d+)/); if(m) return "PR #"+m[2]+" ("+m[1]+")";
+  if(/drive\.google\.com\/drive\/folders/.test(u)) return "Thư mục Drive";
+  if(/docs\.google\.com\/spreadsheets/.test(u)) return "Google Sheet";
+  if(/docs\.google\.com\/document/.test(u)) return "Google Doc";
+  if(/docs\.google\.com\/presentation/.test(u)) return "Google Slides";
+  if(/drive\.google\.com\/file/.test(u)) return "File Drive";
+  try{return new URL(u).hostname.replace(/^www\./,"")}catch{return "Mở link"}
+}
+function taskLinks(t){
+  const found=String(t.result||"").match(/https?:\/\/[^\s)"'\]<>]+/g)||[];
+  return [...new Set([t.resultLink,...found].filter(Boolean).map(u=>u.replace(/[.,;:]+$/,"")))].filter(u=>/^https?:\/\//.test(u));
+}
+const permalink=(id)=>location.origin+location.pathname+"#duyet-"+id;
+function fmtWhen(s){if(!s)return"";const d=new Date(s);return isNaN(d)?s:d.toLocaleString("vi-VN",{hour:"2-digit",minute:"2-digit",day:"2-digit",month:"2-digit"});}
+function renderReview(){
+  const box=$("#rlist"); if(!box) return;
+  if(box.contains(document.activeElement)&&document.activeElement.tagName==="TEXTAREA") return; // đang gõ ghi chú: không vẽ lại
+  const list=tasks.filter(t=>t.status==="cho_duyet").sort((a,b)=>(needDecision(parseResult(b.result).qd)-needDecision(parseResult(a.result).qd))||String(b.updated_at||"").localeCompare(String(a.updated_at||"")));
+  if(!list.length){box.innerHTML=`<div class="empty"><b>Không còn việc nào chờ duyệt.</b><span>Khi agent nộp kết quả, việc sẽ hiện ở đây.</span></div>`;}
+  else box.innerHTML=list.map(t=>{
+    const st=rstate[t.id]||(rstate[t.id]={mode:"",note:"",open:false,busy:false,msg:""});
+    const r=parseResult(t.result), need=needDecision(r.qd), p=projects.find(p=>p.id===t.projectId), links=taskLinks(t);
+    let act;
+    if(st.mode==="approve") act=`<span>Duyệt và chuyển sang <b>Xong</b>?</span><button class="ok" data-r="approve-go" ${st.busy?"disabled":""}>${st.busy?"Đang ghi…":"Xác nhận duyệt"}</button><button class="ghost" data-r="cancel">Huỷ</button>`;
+    else if(st.mode==="return") act=`<label class="wide" style="flex-basis:100%">Cần sửa gì? (agent sẽ đọc ghi chú này)<textarea id="rn-${esc(t.id)}" data-r="note">${esc(st.note)}</textarea></label><button class="primary" data-r="return-go" ${st.busy?"disabled":""}>${st.busy?"Đang ghi…":"Gửi trả lại"}</button><button class="ghost" data-r="cancel">Huỷ</button>`;
+    else act=`<button class="ok" data-r="approve">✓ Duyệt</button><button data-r="return">↩ Trả lại sửa</button><span class="grow"></span><button class="ghost" data-r="detail" title="Mở trong bảng Việc">Chi tiết</button><button class="ghost" data-r="copy" title="Chép link tới việc này">🔗 Link</button>`;
+    return `<article class="rcard who-${esc(t.who)} ${flashId===t.id?"flash":""}" id="duyet-${esc(t.id)}" data-id="${esc(t.id)}">
+      <div class="m"><span class="chip who">${esc((WHO[t.who]||{}).n||t.who)}</span>${need?'<span class="chip" style="color:var(--warn)">Cần thầy quyết định</span>':""}${t.due?`<span class="chip num ${t.due<today()?"late":""}">Hạn ${esc(t.due)}</span>`:""}${p?`<span>${esc(p.name)}</span>`:""}<span>nộp ${esc(fmtWhen(t.updated_at))}</span></div>
+      <a class="t" href="#duyet-${esc(t.id)}" style="color:inherit;text-decoration:none">${esc(t.title)}</a>
+      <div class="rblock ${st.open?"":"clamp"}"><div class="eyebrow">Kết quả</div><p>${esc(r.kq||"(agent chưa ghi kết quả)")}</p></div>
+      ${st.open&&r.vd?`<div class="rblock"><div class="eyebrow">Vấn đề</div><p>${esc(r.vd)}</p></div>`:""}
+      ${r.qd?`<div class="rblock q ${need?"need":""}"><div class="eyebrow">Cần quyết định</div><p>${esc(r.qd)}</p></div>`:""}
+      <button class="link" data-r="toggle">${st.open?"Thu gọn":"Xem đầy đủ kết quả"+(r.vd?" và vấn đề":"")}</button>
+      ${links.length?`<div class="rlinks">${links.map(u=>`<a href="${esc(u)}" target="_blank" rel="noopener">↗ ${esc(linkLabel(u))}</a>`).join("")}</div>`:""}
+      <div class="ractions">${act}</div>
+      ${st.msg?`<div class="hint" style="color:var(--bad)">${esc(st.msg)}</div>`:""}
+    </article>`;
+  }).join("");
+  const d=$("#rdone"); d.hidden=!reviewedRecent.length;
+  d.innerHTML=reviewedRecent.length?`<div class="eyebrow" style="margin-top:8px">Vừa xử lý</div>`+reviewedRecent.map(x=>`<div>${x.decision==="approve"?"✓ Đã duyệt":"↩ Đã trả lại"} — ${esc(x.title)} <span class="num">${esc(x.at)}</span></div>`).join(""):"";
+}
+async function reviewAct(id,decision){
+  const st=rstate[id], t=tasks.find(x=>x.id===id); if(!st||!t) return;
+  if(decision==="return"&&!st.note.trim()){st.msg="Ghi chú cần sửa gì trước khi trả lại.";renderReview();return;}
+  st.busy=true;st.msg="";renderReview();
+  try{
+    await api("review","POST",{id,decision,note:decision==="return"?st.note:""});
+    reviewedRecent.unshift({title:t.title,decision,at:new Date().toLocaleTimeString("vi-VN",{hour:"2-digit",minute:"2-digit"})});reviewedRecent=reviewedRecent.slice(0,8);
+    delete rstate[id]; toast(decision==="approve"?"Đã duyệt — chuyển Xong":"Đã trả lại — chuyển Đang làm");
+    if(location.hash==="#duyet-"+id) history.replaceState(null,"",location.pathname+"#duyet");
+    await refresh();
+  }catch(e){st.busy=false;st.msg="Ghi thất bại: "+e.message+". Bấm tải lại trang để kiểm tra trước khi thử lần nữa.";renderReview();}
+}
+function selectTab(name){
+  tab=name;document.querySelectorAll(".tabs button").forEach(x=>x.setAttribute("aria-selected",x.dataset.tab===name));
+  ["tasks","review","projects","usage"].forEach(s=>$("#sec-"+s).hidden=s!==name);try{localStorage.setItem("hv-tab",name)}catch{};renderAll();
+}
+function applyHash(){
+  const h=decodeURIComponent(location.hash||"");
+  if(h==="#duyet"){selectTab("review");window.scrollTo({top:0});return;}
+  let m=h.match(/^#duyet-([A-Za-z0-9_-]+)$/);
+  if(m){selectTab("review");flashId=m[1];renderReview();const c=document.getElementById("duyet-"+m[1]);
+    if(c){c.scrollIntoView({block:"start",behavior:matchMedia("(prefers-reduced-motion: reduce)").matches?"auto":"smooth"});}
+    else if(tasks.length){const t=tasks.find(x=>x.id===m[1]);toast(t?("Việc này đang ở trạng thái "+(STATUS[t.status]||t.status)):"Không tìm thấy việc này");}
+    return;}
+  m=h.match(/^#viec-([A-Za-z0-9_-]+)$/);
+  if(m){selectTab("tasks");sel=m[1];renderBoard();renderDrawer();return;}
 }
 
 function renderProjects(){
@@ -349,11 +462,25 @@ async function refresh(){
 function showLogin(){$("#login").hidden=false;$("#app").hidden=true;}
 function setRO(){document.querySelectorAll("button.primary,#d-del").forEach(b=>b.disabled=true);$("#conn").textContent="Chỉ xem (không có quyền ghi)";$("#conn").classList.add("off")}
 
-function renderAll(){renderStrip();if(tab==="tasks"){renderBoard();renderDrawer()}else{$("#drawer").hidden=true;$("#main").classList.remove("with-drawer")}if(tab==="projects")renderProjects();if(tab==="usage")renderUsage();}
+function renderAll(){renderStrip();if(tab==="tasks"){renderBoard();renderDrawer()}else{$("#drawer").hidden=true;$("#main").classList.remove("with-drawer")}if(tab==="review")renderReview();if(tab==="projects")renderProjects();if(tab==="usage")renderUsage();}
 
 function wire(){
-  document.querySelectorAll(".tabs button").forEach(b=>b.onclick=()=>{tab=b.dataset.tab;document.querySelectorAll(".tabs button").forEach(x=>x.setAttribute("aria-selected",x===b));
-    ["tasks","projects","usage"].forEach(s=>$("#sec-"+s).hidden=s!==tab);try{localStorage.setItem("hv-tab",tab)}catch{};renderAll()});
+  document.querySelectorAll(".tabs button").forEach(b=>b.onclick=()=>{selectTab(b.dataset.tab);history.replaceState(null,"",location.pathname+(b.dataset.tab==="review"?"#duyet":""))});
+  $("#strip").addEventListener("click",e=>{const g=e.target.closest("[data-go]");if(g)location.hash=g.dataset.go});
+  $("#strip").addEventListener("keydown",e=>{const g=e.target.closest("[data-go]");if(g&&e.key==="Enter")location.hash=g.dataset.go});
+  window.addEventListener("hashchange",applyHash);
+  $("#rlist").addEventListener("input",e=>{if(e.target.dataset.r==="note"){const id=e.target.closest(".rcard").dataset.id;rstate[id].note=e.target.value}});
+  $("#rlist").addEventListener("click",async e=>{
+    const b=e.target.closest("[data-r]");if(!b||b.dataset.r==="note")return;const id=b.closest(".rcard").dataset.id, st=rstate[id];if(!st)return;
+    const a=b.dataset.r;
+    if(a==="approve"||a==="return"){st.mode=a;st.msg="";renderReview();if(a==="return")setTimeout(()=>document.getElementById("rn-"+id)?.focus(),0);return;}
+    if(a==="cancel"){st.mode="";st.msg="";renderReview();return;}
+    if(a==="toggle"){st.open=!st.open;renderReview();return;}
+    if(a==="approve-go"){await reviewAct(id,"approve");return;}
+    if(a==="return-go"){await reviewAct(id,"return");return;}
+    if(a==="detail"){location.hash="#viec-"+id;return;}
+    if(a==="copy"){const u=permalink(id);try{await navigator.clipboard.writeText(u);toast("Đã chép link việc này")}catch{prompt("Chép link:",u)}return;}
+  });
   ["#f-who","#f-group","#f-project","#f-done"].forEach(s=>$(s).onchange=renderBoard);
   $("#board").addEventListener("click",e=>{const c=e.target.closest(".card");if(!c)return;sel=c.dataset.id;renderBoard();renderDrawer()});
   $("#board").addEventListener("keydown",e=>{if(e.key==="Enter"){const c=e.target.closest(".card");if(c){sel=c.dataset.id;renderBoard();renderDrawer()}}});
@@ -369,8 +496,8 @@ function wire(){
     try{const r=await api("suggest","POST",{text});
       $("#nt-title").value=r.title||$("#nt-title").value;$("#nt-group").value=r.group;$("#nt-who").value=r.who;$("#nt-pri").value=String(r.priority||2);$("#nt-due").value=r.due||"";$("#nt-desc").value=r.desc||"";
       if(r.projectId&&[...$("#nt-project").options].some(o=>o.value===r.projectId))$("#nt-project").value=r.projectId;
-      const rs=$("#nt-reason");rs.hidden=false;rs.textContent="Gợi ý ("+(r.model||"gemini")+", "+(r.tokens||0)+" token): "+(r.reason||"")+" — kiểm tra rồi bấm Thêm việc.";
-    }catch(e){toast(e.message)}finally{b.disabled=false;b.textContent="✨ Gợi ý điền";}
+      const rs=$("#nt-reason");rs.hidden=false;rs.style.color="";rs.textContent="Gợi ý ("+(r.model||"gemini")+", "+(r.tokens||0)+" token): "+(r.reason||"")+" — kiểm tra rồi bấm Thêm việc.";
+    }catch(e){const rs=$("#nt-reason");rs.hidden=false;rs.style.color="var(--bad)";rs.textContent="Gợi ý thất bại: "+e.message;}finally{b.disabled=false;b.textContent="✨ Gợi ý điền";}
   };
   $("#nt-claude").onclick=async()=>{
     const text=[$("#nt-title").value.trim(),$("#nt-desc").value.trim()].filter(Boolean).join("\n");
@@ -380,6 +507,12 @@ function wire(){
   };
   $("#settings-btn").onclick=async()=>{const p=$("#settings");p.hidden=!p.hidden;if(!p.hidden){try{const r=await api("settings");$("#set-model").value=r.gemini_model||"";$("#set-info").textContent=r.gemini_api_key_masked?"Key hiện có: "+r.gemini_api_key_masked:"Chưa có key.";}catch(e){$("#set-info").textContent=e.message}}};
   $("#set-close").onclick=()=>{$("#settings").hidden=true};
+  $("#set-test").onclick=async()=>{const o=$("#set-test-out"),b=$("#set-test");o.hidden=false;o.style.color="";o.textContent="Đang gọi thử Gemini…";b.disabled=true;
+    try{if($("#set-key").value.trim()||$("#set-model").value.trim()){await api("settings","POST",{gemini_api_key:$("#set-key").value,gemini_model:$("#set-model").value});$("#set-key").value="";}
+      const r=await api("gemini_test");o.style.color=r.ok?"var(--good)":"var(--bad)";
+      o.textContent=(r.ok?"✓ ":"✗ ")+r.message+(r.models&&r.models.length?" Model dùng được: "+r.models.join(", ")+".":"");
+      if(r.ok)$("#set-model").value=r.model||$("#set-model").value;
+    }catch(e){o.style.color="var(--bad)";o.textContent="✗ "+e.message}finally{b.disabled=false}};
   $("#set-save").onclick=async()=>{try{await api("settings","POST",{gemini_api_key:$("#set-key").value,gemini_model:$("#set-model").value});$("#set-key").value="";toast("Đã lưu cài đặt");$("#settings").hidden=true;}catch(e){toast(e.message)}};
   $("#np-add").onclick=async()=>{
     const name=$("#np-name").value.trim();if(!name){toast("Nhập tên dự án");return;}
@@ -396,14 +529,15 @@ function wire(){
 
 async function start(){
   fillSelects();wire();
-  try{const t=localStorage.getItem("hv-tab");if(t&&$("#tab-"+t))$("#tab-"+t).click();}catch{}
+  try{const t=localStorage.getItem("hv-tab");if(!location.hash&&t&&$("#tab-"+t))selectTab(t);}catch{}
   renderAll();
-  $("#pw-go").onclick=async()=>{try{await api("login","POST",{password:$("#pw").value});$("#login").hidden=true;$("#app").hidden=false;$("#pw").value="";await refresh();}catch(e){$("#pw-msg").textContent=e.message;}};
+  $("#pw-go").onclick=async()=>{try{await api("login","POST",{password:$("#pw").value});$("#login").hidden=true;$("#app").hidden=false;$("#pw").value="";await refresh();applyHash();}catch(e){$("#pw-msg").textContent=e.message;}};
   $("#pw").addEventListener("keydown",e=>{if(e.key==="Enter")$("#pw-go").click()});
   $("#logout").onclick=async()=>{await api("logout","POST",{});showLogin();};
   const w=await fetch("api.php?action=whoami",{credentials:"same-origin"}).then(r=>r.json()).catch(()=>({}));
   if(!w.loggedIn){showLogin();return;}
   await refresh();
+  applyHash();
   setInterval(()=>{if(document.visibilityState==="visible")refresh()},60000);
 }
 start();
