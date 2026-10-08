@@ -1,5 +1,6 @@
 <?php require __DIR__.'/lib.php'; if(!hv_config()){header('Location: setup.php');exit;} ?>
 <!doctype html><html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Hộp việc đội agent</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg?v=20261008-logo"><link rel="icon" type="image/x-icon" sizes="16x16 32x32 48x48" href="favicon.ico?v=20261008-logo"><link rel="apple-touch-icon" sizes="180x180" href="img/apple-touch-icon.png?v=20261008-logo">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
 <style>
 /* Layout: a 3-tab operations board — Hộp việc (kanban theo trạng thái), Dự án, Tiêu hao.
@@ -38,6 +39,10 @@ textarea{min-height:72px;resize:vertical}
 label{display:grid;gap:4px;font-size:12px;color:var(--muted)}
 header{display:flex;flex-wrap:wrap;align-items:center;gap:12px 20px;padding-block:6px 12px;border-bottom:1px solid var(--line)}
 header .spacer{flex:1}
+/* Logo hoa sen: nền trắng để rõ ở cả giao diện sáng lẫn tối */
+.brand{display:flex;align-items:center;gap:10px}
+.brand img{width:40px;height:40px;flex:none;background:#fff;border-radius:8px;padding:2px}
+.login .mark{width:96px;height:96px;justify-self:center;background:#fff;border-radius:16px;padding:6px}
 .tabs{display:flex;gap:4px}
 .tabs button{border-color:transparent;background:transparent;color:var(--muted);font-weight:500;padding:6px 10px}
 .tabs button[aria-selected="true"]{background:var(--panel-2);color:var(--fg);font-weight:600}
@@ -123,13 +128,16 @@ button.link{border:0;background:none;color:var(--accent);padding:2px 0;font-weig
 .rdone{font-size:13px;color:var(--muted);display:grid;gap:4px}
 .login{max-width:360px;margin:60px auto;display:grid;gap:10px;background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:20px}
 </style></head><body>
-<div class="login" id="login" hidden><h2>Đăng nhập Hộp việc</h2><label>Mật khẩu<input type="password" id="pw" autocomplete="current-password"></label><button class="primary" id="pw-go">Vào</button><div class="hint" id="pw-msg"></div></div>
+<div class="login" id="login" hidden><img class="mark" src="img/logo-sen.svg?v=20261008-logo" alt="Logo hoa sen đọng sương" width="96" height="96"><h2>Đăng nhập Hộp việc</h2><label>Mật khẩu<input type="password" id="pw" autocomplete="current-password"></label><button class="primary" id="pw-go">Vào</button><div class="hint" id="pw-msg"></div></div>
 <div id="app">
 
 <header>
-  <div>
-    <div class="eyebrow">Đội agent của Tuấn</div>
-    <h1>Hộp việc</h1>
+  <div class="brand">
+    <img src="img/logo-sen-nho.svg?v=20261008-logo" alt="" width="40" height="40">
+    <div>
+      <div class="eyebrow">Đội agent của Tuấn</div>
+      <h1>Hộp việc</h1>
+    </div>
   </div>
   <nav class="tabs" role="tablist">
     <button role="tab" aria-selected="true" data-tab="tasks" id="tab-tasks">Việc</button>
