@@ -54,7 +54,7 @@ function hv_migrate(PDO $pdo): void {
         created_at TEXT, created_by TEXT DEFAULT '', updated_at TEXT, updated_by TEXT DEFAULT '')");
     $pdo->exec("CREATE TABLE IF NOT EXISTS usage (
         day TEXT PRIMARY KEY, claude_tokens INTEGER DEFAULT 0, opus_tokens INTEGER DEFAULT 0, gemini_tokens INTEGER DEFAULT 0,
-        agy_credits INTEGER DEFAULT 0, nlm_queries INTEGER DEFAULT 0, spark_tasks INTEGER DEFAULT 0,
+        agy_credits INTEGER DEFAULT 0, nlm_queries INTEGER DEFAULT 0, spark_tasks INTEGER DEFAULT 0, local_calls INTEGER DEFAULT 0,
         note TEXT DEFAULT '', updated_at TEXT)");
     $pdo->exec("CREATE TABLE IF NOT EXISTS budgets (key TEXT PRIMARY KEY, value INTEGER NOT NULL)");
     $pdo->exec("CREATE TABLE IF NOT EXISTS log (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT, actor TEXT, action TEXT, task_id TEXT, detail TEXT)");
@@ -64,10 +64,14 @@ function hv_migrate(PDO $pdo): void {
         $st = $pdo->prepare("INSERT INTO budgets(key,value) VALUES(?,?)");
         foreach (['claude_tokens'=>2000000,'opus_tokens'=>300000,'gemini_tokens'=>5000000,'agy_credits'=>1000,'nlm_queries'=>1200,'spark_tasks'=>300] as $k=>$v) $st->execute([$k,$v]);
     }
+    // Ba Sáu (máy nhà): cột lượt gọi mô hình cục bộ cho CSDL cũ + hạn mức mặc định
+    $cols = array_column($pdo->query("PRAGMA table_info(usage)")->fetchAll(), 'name');
+    if (!in_array('local_calls', $cols, true)) $pdo->exec("ALTER TABLE usage ADD COLUMN local_calls INTEGER DEFAULT 0");
+    $pdo->exec("INSERT OR IGNORE INTO budgets(key,value) VALUES('local_calls',30000)");
 }
 
-const HV_USAGE_KEYS = ['claude_tokens','opus_tokens','gemini_tokens','agy_credits','nlm_queries','spark_tasks'];
-const HV_WHO = ['claude','gemini','notebooklm','antigravity','spark','co-van','tuan'];
+const HV_USAGE_KEYS = ['claude_tokens','opus_tokens','gemini_tokens','agy_credits','nlm_queries','spark_tasks','local_calls'];
+const HV_WHO = ['claude','gemini','notebooklm','antigravity','spark','ba-sau','co-van','tuan'];
 const HV_STATUS = ['moi','dang_lam','cho_duyet','chan','xong'];
 const HV_GROUPS = ['nghien-cuu','giang-day','edtech','quan-ly'];
 
@@ -188,9 +192,9 @@ function hv_log_usage(string $day, array $d, string $actor, bool $add = true): a
     $vals = []; foreach (HV_USAGE_KEYS as $k) $vals[$k] = ($add ? (int)($cur[$k] ?? 0) : 0) + (int)($d[$k] ?? 0);
     if (!$add) foreach (HV_USAGE_KEYS as $k) if (!array_key_exists($k,$d)) $vals[$k] = (int)($cur[$k] ?? 0);
     $note = isset($d['note']) ? ($add && !empty($cur['note']) ? $cur['note'] . ' | ' . $d['note'] : (string)$d['note']) : ($cur['note'] ?? '');
-    hv_db()->prepare('INSERT INTO usage(day,claude_tokens,opus_tokens,gemini_tokens,agy_credits,nlm_queries,spark_tasks,note,updated_at) VALUES(?,?,?,?,?,?,?,?,?)
-        ON CONFLICT(day) DO UPDATE SET claude_tokens=excluded.claude_tokens,opus_tokens=excluded.opus_tokens,gemini_tokens=excluded.gemini_tokens,agy_credits=excluded.agy_credits,nlm_queries=excluded.nlm_queries,spark_tasks=excluded.spark_tasks,note=excluded.note,updated_at=excluded.updated_at')
-        ->execute([$day,$vals['claude_tokens'],$vals['opus_tokens'],$vals['gemini_tokens'],$vals['agy_credits'],$vals['nlm_queries'],$vals['spark_tasks'],$note,hv_now()]);
+    hv_db()->prepare('INSERT INTO usage(day,claude_tokens,opus_tokens,gemini_tokens,agy_credits,nlm_queries,spark_tasks,local_calls,note,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?)
+        ON CONFLICT(day) DO UPDATE SET claude_tokens=excluded.claude_tokens,opus_tokens=excluded.opus_tokens,gemini_tokens=excluded.gemini_tokens,agy_credits=excluded.agy_credits,nlm_queries=excluded.nlm_queries,spark_tasks=excluded.spark_tasks,local_calls=excluded.local_calls,note=excluded.note,updated_at=excluded.updated_at')
+        ->execute([$day,$vals['claude_tokens'],$vals['opus_tokens'],$vals['gemini_tokens'],$vals['agy_credits'],$vals['nlm_queries'],$vals['spark_tasks'],$vals['local_calls'],$note,hv_now()]);
     hv_log($actor, $add ? 'add_usage' : 'set_usage', '', $day . ' ' . json_encode($d));
     return array_merge(['day'=>$day], $vals, ['note'=>$note]);
 }
@@ -227,7 +231,8 @@ group (nhóm việc): nghien-cuu (bài báo, literature review, dữ liệu đ�
 who (giao cho) — chọn tuyến rẻ nhất đủ làm:
 - notebooklm: đọc/tra cứu/tóm tắt tài liệu có sẵn trong notebook, trích dẫn, hỏi đáp trên tài liệu.
 - gemini: viết nháp, dịch, tóm tắt văn bản gửi kèm, soạn đề/bài tập hàng loạt, việc lặp theo mẫu.
-- antigravity: viết/sửa code, xử lý nhiều file, đọc ảnh/PDF scan/video, chạy script trên máy.
+- antigravity: viết/sửa code, phát triển ứng dụng, đọc ảnh/PDF scan, phần cứng.
+- ba-sau: việc trên máy PC nhà, miễn phí: tóm tắt/phân loại/gắn nhãn hàng loạt (≥ 20 mục) bằng mô hình cục bộ, chép lời ghi âm/video (Whisper), tìm hoặc sắp xếp file trên máy, chạy script, cài phần mềm.
 - spark: việc theo lịch trong Gmail/Calendar/Drive (gom email, nhắc hạn, cập nhật bảng).
 - claude: cần suy luận, lập luận, phản biện, duyệt chất lượng, viết phần khó nhất, quyết định thiết kế.
 - co-van: chỉ khi mô tả nói rõ là vấn đề khó lặp lại, mâu thuẫn ưu tiên, cần quyết định chiến lược.

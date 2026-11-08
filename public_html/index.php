@@ -8,19 +8,19 @@
 :root{
   --bg:#f3f4f2; --panel:#ffffff; --panel-2:#e9ebe7; --fg:#1b1f1d; --muted:#5f6764; --line:#d6dad5;
   --accent:#0f766e; --accent-ink:#ffffff; --warn:#b7791f; --bad:#b42318; --good:#1f7a3e;
-  --c-claude:#c2410c; --c-gemini:#1d4ed8; --c-notebooklm:#15803d; --c-antigravity:#6d28d9; --c-spark:#b45309; --c-co-van:#9f1239; --c-tuan:#475569;
+  --c-claude:#c2410c; --c-gemini:#1d4ed8; --c-notebooklm:#15803d; --c-antigravity:#6d28d9; --c-spark:#b45309; --c-co-van:#9f1239; --c-ba-sau:#0f766e; --c-tuan:#475569;
   --font-ui:"Be Vietnam Pro",system-ui,"Segoe UI",sans-serif; --font-num:"JetBrains Mono",ui-monospace,Consolas,monospace;
   --r:8px;
 }
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
   --bg:#141716; --panel:#1d2120; --panel-2:#262b29; --fg:#e8eae7; --muted:#9aa39f; --line:#343a37;
   --accent:#2dd4bf; --accent-ink:#06211e; --warn:#f3b24a; --bad:#f87171; --good:#4ade80;
-  --c-claude:#fb923c; --c-gemini:#60a5fa; --c-notebooklm:#4ade80; --c-antigravity:#a78bfa; --c-spark:#fbbf24; --c-co-van:#fb7185; --c-tuan:#94a3b8;
+  --c-claude:#fb923c; --c-gemini:#60a5fa; --c-notebooklm:#4ade80; --c-antigravity:#a78bfa; --c-spark:#fbbf24; --c-co-van:#fb7185; --c-ba-sau:#2dd4bf; --c-tuan:#94a3b8;
   color-scheme:dark}}
 :root[data-theme="dark"]{
   --bg:#141716; --panel:#1d2120; --panel-2:#262b29; --fg:#e8eae7; --muted:#9aa39f; --line:#343a37;
   --accent:#2dd4bf; --accent-ink:#06211e; --warn:#f3b24a; --bad:#f87171; --good:#4ade80;
-  --c-claude:#fb923c; --c-gemini:#60a5fa; --c-notebooklm:#4ade80; --c-antigravity:#a78bfa; --c-spark:#fbbf24; --c-co-van:#fb7185; --c-tuan:#94a3b8;
+  --c-claude:#fb923c; --c-gemini:#60a5fa; --c-notebooklm:#4ade80; --c-antigravity:#a78bfa; --c-spark:#fbbf24; --c-co-van:#fb7185; --c-ba-sau:#2dd4bf; --c-tuan:#94a3b8;
   color-scheme:dark}
 *{box-sizing:border-box}
 body{background:var(--bg);color:var(--fg);font-family:var(--font-ui);font-size:14px;line-height:1.45;padding-inline:16px;padding-block:12px 32px;max-width:1280px;margin:0 auto}
@@ -102,7 +102,7 @@ td.r,th.r{text-align:right}
 .toast{position:fixed;left:50%;bottom:calc(16px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:8px 14px;border-radius:999px;font-size:13px;opacity:0;transition:opacity .2s;pointer-events:none}
 .toast.on{opacity:1}
 .hint{font-size:12px;color:var(--muted)}
-.who-claude{--who:var(--c-claude)}.who-gemini{--who:var(--c-gemini)}.who-notebooklm{--who:var(--c-notebooklm)}.who-antigravity{--who:var(--c-antigravity)}.who-spark{--who:var(--c-spark)}.who-co-van{--who:var(--c-co-van)}.who-tuan{--who:var(--c-tuan)}
+.who-claude{--who:var(--c-claude)}.who-gemini{--who:var(--c-gemini)}.who-notebooklm{--who:var(--c-notebooklm)}.who-antigravity{--who:var(--c-antigravity)}.who-spark{--who:var(--c-spark)}.who-ba-sau{--who:var(--c-ba-sau)}.who-co-van{--who:var(--c-co-van)}.who-tuan{--who:var(--c-tuan)}
 @media(prefers-reduced-motion:reduce){*{transition:none!important}}
 body{margin:0}img{max-width:100%}[hidden]{display:none!important}
 .tabs .badge{display:inline-block;min-width:18px;padding:0 5px;margin-left:4px;border-radius:999px;background:var(--warn);color:var(--panel);font-size:11px;font-weight:700;text-align:center}
@@ -233,15 +233,16 @@ const WHO = {
   notebooklm:{n:"NotebookLM",unit:"truy vấn",budget:"nlm_queries"},
   antigravity:{n:"Antigravity",unit:"credit",budget:"agy_credits"},
   spark:{n:"Gemini Spark",unit:"tác vụ",budget:"spark_tasks"},
+  "ba-sau":{n:"Ba Sáu (máy nhà)",unit:"lượt",budget:"local_calls"},
   "co-van":{n:"Cố vấn (Opus)",unit:"token",budget:"opus_tokens"},
   tuan:{n:"Tuấn",unit:"",budget:""}
 };
-const USAGE_KEYS = ["claude_tokens","opus_tokens","gemini_tokens","agy_credits","nlm_queries","spark_tasks"];
-const USAGE_WHO = {claude_tokens:"claude",opus_tokens:"co-van",gemini_tokens:"gemini",agy_credits:"antigravity",nlm_queries:"notebooklm",spark_tasks:"spark"};
-const USAGE_LABEL = {claude_tokens:"Claude (token)",opus_tokens:"Cố vấn Opus (token)",gemini_tokens:"Gemini API (token)",agy_credits:"Antigravity (credit)",nlm_queries:"NotebookLM (truy vấn)",spark_tasks:"Spark (tác vụ)"};
+const USAGE_KEYS = ["claude_tokens","opus_tokens","gemini_tokens","agy_credits","nlm_queries","spark_tasks","local_calls"];
+const USAGE_WHO = {claude_tokens:"claude",opus_tokens:"co-van",gemini_tokens:"gemini",agy_credits:"antigravity",nlm_queries:"notebooklm",spark_tasks:"spark",local_calls:"ba-sau"};
+const USAGE_LABEL = {claude_tokens:"Claude (token)",opus_tokens:"Cố vấn Opus (token)",gemini_tokens:"Gemini API (token)",agy_credits:"Antigravity (credit)",nlm_queries:"NotebookLM (truy vấn)",spark_tasks:"Spark (tác vụ)",local_calls:"Ba Sáu – mô hình cục bộ (lượt)"};
 const GROUPS = {"nghien-cuu":"Nghiên cứu & công bố","giang-day":"Giảng dạy & thực địa","edtech":"Lập trình EdTech","quan-ly":"Quản lý & báo cáo"};
 const STATUS = {moi:"Mới",dang_lam:"Đang làm",cho_duyet:"Chờ duyệt",chan:"Bị chặn",xong:"Xong"};
-const DEFAULT_BUDGETS = {claude_tokens:2000000,opus_tokens:300000,gemini_tokens:5000000,agy_credits:1000,nlm_queries:1200,spark_tasks:300};
+const DEFAULT_BUDGETS = {claude_tokens:2000000,opus_tokens:300000,gemini_tokens:5000000,agy_credits:1000,nlm_queries:1200,spark_tasks:300,local_calls:30000};
 
 let db=null, tasks=[], projects=[], usage=[], budgets=DEFAULT_BUDGETS, sel=null, tab="tasks", canWrite=true;
 const $=s=>document.querySelector(s);

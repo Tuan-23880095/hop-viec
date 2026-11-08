@@ -42,9 +42,9 @@ function text($id, $data, bool $isError = false): array {
 }
 
 function tools(): array {
-    $who = ['type'=>'string','enum'=>HV_WHO,'description'=>'claude | gemini | notebooklm | antigravity | spark | co-van | tuan'];
+    $who = ['type'=>'string','enum'=>HV_WHO,'description'=>'claude | gemini | notebooklm | antigravity | spark | ba-sau | co-van | tuan'];
     $status = ['type'=>'string','enum'=>HV_STATUS,'description'=>'moi | dang_lam | cho_duyet | chan | xong'];
-    $usage = ['type'=>'object','description'=>'Tiêu hao CỘNG DỒN vào việc: claude_tokens, opus_tokens, gemini_tokens, agy_credits, nlm_queries, spark_tasks (số nguyên)',
+    $usage = ['type'=>'object','description'=>'Tiêu hao CỘNG DỒN vào việc: claude_tokens, opus_tokens, gemini_tokens, agy_credits, nlm_queries, spark_tasks, local_calls (lượt gọi mô hình cục bộ của Ba Sáu) (số nguyên)',
         'properties'=>array_fill_keys(HV_USAGE_KEYS, ['type'=>'integer'])];
     return [
         ['name'=>'overview','description'=>'Tổng quan Hộp việc: số việc mở, quá hạn, chờ duyệt, tiêu hao tháng so với hạn mức. Gọi đầu phiên.','inputSchema'=>['type'=>'object','properties'=>new stdClass()]],
